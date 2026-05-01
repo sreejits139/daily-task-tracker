@@ -1,6 +1,7 @@
 {
   "name": "daily-task-tracker",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "A modern task management application with projects, notifications, and real-time collaboration built with Next.js 16 and Supabase",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,9 +10,22 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@radix-ui/react-checkbox": "^1.3.3",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.105.0",
+    "@tanstack/react-query": "^5.100.5",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^1.11.0",
     "next": "16.2.4",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
