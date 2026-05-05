@@ -37,6 +37,7 @@ export class TaskNotificationService {
   private notificationState: NotificationState = {}
   private checkInterval: NodeJS.Timeout | null = null
   private notificationTime: NotificationTime = DEFAULT_NOTIFICATION_TIME
+  private notificationsEnabled: boolean = true // App-level preference
 
   constructor() {
     // Load notification state from localStorage
@@ -60,6 +61,16 @@ export class TaskNotificationService {
       } catch (error) {
         console.warn('Failed to load notification preference from localStorage:', error)
       }
+
+      // Load app-level notification enabled preference
+      try {
+        const enabledPreference = localStorage.getItem('notifications_enabled')
+        if (enabledPreference !== null) {
+          this.notificationsEnabled = JSON.parse(enabledPreference)
+        }
+      } catch (error) {
+        console.warn('Failed to load notification enabled preference from localStorage:', error)
+      }
     }
   }
 
@@ -80,6 +91,23 @@ export class TaskNotificationService {
     }
   }
 
+  // Get app-level notification enabled preference
+  getNotificationsEnabled(): boolean {
+    return this.notificationsEnabled
+  }
+
+  // Set app-level notification enabled preference
+  setNotificationsEnabled(enabled: boolean) {
+    this.notificationsEnabled = enabled
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('notifications_enabled', JSON.stringify(enabled))
+      } catch (error) {
+        console.warn('Failed to save notification enabled preference to localStorage:', error)
+      }
+    }
+  }
+
   // Request notification permission
   async requestPermission(): Promise<boolean> {
     if (!('Notification' in window)) {
@@ -88,19 +116,33 @@ export class TaskNotificationService {
     }
 
     if (Notification.permission === 'granted') {
+      // Enable app-level preference when permission is already granted
+      this.setNotificationsEnabled(true)
       return true
     }
 
     if (Notification.permission !== 'denied') {
       const permission = await Notification.requestPermission()
-      return permission === 'granted'
+      if (permission === 'granted') {
+        // Enable app-level preference when permission is newly granted
+        this.setNotificationsEnabled(true)
+        return true
+      }
     }
 
     return false
   }
 
-  // Check if notifications are enabled
+  // Check if notifications are enabled (both browser permission and app preference)
   isEnabled(): boolean {
+    return this.notificationsEnabled &&
+           typeof window !== 'undefined' &&
+           'Notification' in window &&
+           Notification.permission === 'granted'
+  }
+
+  // Check if browser has granted permission (regardless of app preference)
+  hasPermission(): boolean {
     return typeof window !== 'undefined' &&
            'Notification' in window &&
            Notification.permission === 'granted'

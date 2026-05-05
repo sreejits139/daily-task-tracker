@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { User, Mail, Lock, Bell } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { User, Mail, Lock, Bell, AlertCircle } from 'lucide-react'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { getNotificationService, NOTIFICATION_TIME_LABELS, type NotificationTime } from '@/lib/notifications'
 
@@ -24,13 +25,26 @@ export function UserProfileDialog({ open, onOpenChange, user }: UserProfileDialo
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [notificationTime, setNotificationTime] = useState<NotificationTime>('1hour')
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default')
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true) // App-level preference
   const supabase = createClient()
 
-  // Load notification preference on mount
+  // Check notification permission status
+  const checkNotificationPermission = () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission)
+    }
+  }
+
+  // Load notification preference on mount and when dialog opens
   useEffect(() => {
-    const notificationService = getNotificationService()
-    setNotificationTime(notificationService.getNotificationTime())
-  }, [])
+    if (open) {
+      const notificationService = getNotificationService()
+      setNotificationTime(notificationService.getNotificationTime())
+      setNotificationsEnabled(notificationService.getNotificationsEnabled())
+      checkNotificationPermission()
+    }
+  }, [open])
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -100,6 +114,42 @@ export function UserProfileDialog({ open, onOpenChange, user }: UserProfileDialo
     notificationService.setNotificationTime(time)
     setSuccess('Notification preferences updated!')
     // Clear success message after 3 seconds
+    setTimeout(() => setSuccess(null), 3000)
+  }
+
+  const handleEnableNotifications = async () => {
+    setError(null)
+    setSuccess(null)
+
+    const notificationService = getNotificationService()
+    const granted = await notificationService.requestPermission()
+
+    if (granted) {
+      setNotificationPermission('granted')
+      setNotificationsEnabled(true)
+      setSuccess('Browser notifications enabled! You will receive alerts for upcoming tasks.')
+      setTimeout(() => setSuccess(null), 3000)
+    } else {
+      // Check if it was denied
+      checkNotificationPermission()
+      if (Notification.permission === 'denied') {
+        setError('Notification permission denied. Please enable notifications in your browser settings.')
+      } else {
+        setError('Failed to enable notifications. Please try again.')
+      }
+    }
+  }
+
+  const handleToggleNotifications = (checked: boolean) => {
+    const notificationService = getNotificationService()
+    notificationService.setNotificationsEnabled(checked)
+    setNotificationsEnabled(checked)
+
+    if (checked) {
+      setSuccess('Notifications enabled! You will receive task reminders.')
+    } else {
+      setSuccess('Notifications disabled. You will not receive task reminders.')
+    }
     setTimeout(() => setSuccess(null), 3000)
   }
 
@@ -197,25 +247,111 @@ export function UserProfileDialog({ open, onOpenChange, user }: UserProfileDialo
               <span>Notification Preferences</span>
             </h3>
 
-            <div className="space-y-2">
-              <label htmlFor="notificationTime" className="text-sm font-medium text-slate-700">
-                Notify me before tasks are due
-              </label>
-              <Select value={notificationTime} onValueChange={handleNotificationTimeChange}>
-                <SelectTrigger id="notificationTime">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="15min">{NOTIFICATION_TIME_LABELS['15min']}</SelectItem>
-                  <SelectItem value="30min">{NOTIFICATION_TIME_LABELS['30min']}</SelectItem>
-                  <SelectItem value="1hour">{NOTIFICATION_TIME_LABELS['1hour']}</SelectItem>
-                  <SelectItem value="1day">{NOTIFICATION_TIME_LABELS['1day']}</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-slate-500">
-                You'll receive browser notifications when tasks are approaching their due date
-              </p>
-            </div>
+            {/* Browser Permission Status */}
+            {notificationPermission !== 'granted' ? (
+              // Show permission request UI when browser permission not granted
+              <div className="space-y-3 mb-4">
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="notificationsGranted"
+                      checked={false}
+                      disabled
+                      className="cursor-not-allowed"
+                    />
+                    <div>
+                      <label
+                        htmlFor="notificationsGranted"
+                        className="text-sm font-medium text-slate-700 cursor-default"
+                      >
+                        Browser Notifications
+                      </label>
+                      <p className="text-xs text-slate-500">
+                        {notificationPermission === 'default' && 'Not enabled - Click below to enable'}
+                        {notificationPermission === 'denied' && 'Blocked - Enable in browser settings'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={notificationPermission === 'denied' ? 'outline' : 'default'}
+                    onClick={handleEnableNotifications}
+                    disabled={loading}
+                  >
+                    {notificationPermission === 'denied' ? 'Settings' : 'Enable'}
+                  </Button>
+                </div>
+
+                {notificationPermission === 'denied' && (
+                  <div className="flex items-start space-x-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-xs text-amber-800">
+                      <p className="font-medium">Notifications are blocked</p>
+                      <p className="mt-1">To enable notifications, you need to allow them in your browser settings:</p>
+                      <ul className="list-disc list-inside mt-1 space-y-0.5">
+                        <li>Chrome/Edge: Click the lock icon in the address bar → Site settings → Notifications</li>
+                        <li>Safari: Safari menu → Settings → Websites → Notifications</li>
+                        <li>Firefox: Click the shield icon → Permissions → Notifications</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Show toggle when browser permission is granted
+              <div className="space-y-4 mb-4">
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="flex items-center space-x-3">
+                    <Checkbox
+                      id="notificationsEnabled"
+                      checked={notificationsEnabled}
+                      onCheckedChange={handleToggleNotifications}
+                    />
+                    <div>
+                      <label
+                        htmlFor="notificationsEnabled"
+                        className="text-sm font-medium text-slate-700 cursor-pointer"
+                      >
+                        Enable Notifications
+                      </label>
+                      <p className="text-xs text-slate-500">
+                        {notificationsEnabled
+                          ? 'You will receive browser notifications for upcoming tasks'
+                          : 'Notifications are turned off'}
+                      </p>
+                    </div>
+                  </div>
+                  {notificationsEnabled && (
+                    <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
+                      Active
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Notification Timing (only show if notifications are enabled) */}
+            {notificationPermission === 'granted' && notificationsEnabled && (
+              <div className="space-y-2">
+                <label htmlFor="notificationTime" className="text-sm font-medium text-slate-700">
+                  Notify me before tasks are due
+                </label>
+                <Select value={notificationTime} onValueChange={handleNotificationTimeChange}>
+                  <SelectTrigger id="notificationTime">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="15min">{NOTIFICATION_TIME_LABELS['15min']}</SelectItem>
+                    <SelectItem value="30min">{NOTIFICATION_TIME_LABELS['30min']}</SelectItem>
+                    <SelectItem value="1hour">{NOTIFICATION_TIME_LABELS['1hour']}</SelectItem>
+                    <SelectItem value="1day">{NOTIFICATION_TIME_LABELS['1day']}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500">
+                  You'll receive browser notifications when tasks are approaching their due date
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-slate-200 pt-4">

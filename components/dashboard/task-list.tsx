@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Plus, Search, Eye, EyeOff, Clock, AlertCircle, Columns, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2, XCircle, Pause, Ban, Trash2 } from 'lucide-react'
+import { Plus, Search, Eye, EyeOff, Clock, AlertCircle, Columns, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2, XCircle, Pause, Ban, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import { TaskDialog } from './task-dialog'
 import { TaskDetailPanel } from './task-detail-panel'
 import { getNotificationService } from '@/lib/notifications'
@@ -77,6 +77,7 @@ export function TaskList({ userId, projectId }: TaskListProps) {
   const [bulkAction, setBulkAction] = useState<'status' | 'project' | 'delete' | null>(null)
   const [bulkStatus, setBulkStatus] = useState<TaskStatus>('not_started')
   const [bulkProject, setBulkProject] = useState<string | null>(null)
+  const [showOverview, setShowOverview] = useState(false) // Collapsed by default on mobile
   const supabase = createClient()
 
   // Check if a task is overdue
@@ -107,6 +108,16 @@ export function TaskList({ userId, projectId }: TaskListProps) {
       }
     } catch (error) {
       console.warn('Failed to load sort preferences from localStorage:', error)
+    }
+
+    // Load overview visibility preference (default collapsed on mobile)
+    try {
+      const savedShowOverview = localStorage.getItem('taskListShowOverview')
+      if (savedShowOverview !== null) {
+        setShowOverview(JSON.parse(savedShowOverview))
+      }
+    } catch (error) {
+      console.warn('Failed to load overview preference from localStorage:', error)
     }
   }, [])
 
@@ -664,22 +675,65 @@ export function TaskList({ userId, projectId }: TaskListProps) {
     <div className="flex h-full">
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="bg-white border-b border-slate-200 p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-2xl font-semibold text-slate-900">{getPageTitle()}</h2>
-              <p className="text-sm text-slate-500 mt-1">
+        <div className="bg-white border-b border-slate-200 p-2 sm:p-4 pl-12 sm:pl-4">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="flex-1">
+              <h2 className="text-lg sm:text-2xl font-semibold text-slate-900">{getPageTitle()}</h2>
+              <p className="text-xs text-slate-500 mt-0.5 sm:mt-1">
                 {filteredTasks.length} {filteredTasks.length === 1 ? 'task' : 'tasks'}
                 {statusFilter !== 'all' && ` (filtered by ${statusLabels[statusFilter as TaskStatus]})`}
                 {!showCompleted && statusFilter === 'all' && ` (${completedCount} completed hidden)`}
               </p>
             </div>
-            <div className="flex items-center space-x-2">
+          </div>
+
+          <div className="flex flex-col space-y-2">
+            {/* Search and filters - single row on mobile */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
+                <Input
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 sm:pl-9 h-8 sm:h-10 text-sm"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as TaskStatus | 'all')}>
+                <SelectTrigger className="w-[100px] sm:w-[140px] h-8 sm:h-10 text-xs sm:text-sm">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="not_started">Not Started</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="complete">Complete</SelectItem>
+                  <SelectItem value="blocked">Blocked</SelectItem>
+                  <SelectItem value="on_hold">On Hold</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Action buttons row */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCompleted(!showCompleted)}
+                className="h-8 px-2 sm:px-3 text-xs sm:text-sm"
+              >
+                {showCompleted ? (
+                  <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-1.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-1.5" />
+                )}
+                <span className="hidden sm:inline">{showCompleted ? 'Hide' : 'Show'}</span>
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Columns className="h-4 w-4 mr-2" />
-                    Columns
+                  <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm">
+                    <Columns className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Columns</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -709,57 +763,15 @@ export function TaskList({ userId, projectId }: TaskListProps) {
                   </DropdownMenuCheckboxItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button onClick={() => setIsDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                New Task
+              <Button onClick={() => setIsDialogOpen(true)} size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm">
+                <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">New Task</span>
               </Button>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search tasks..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as TaskStatus | 'all')}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="not_started">Not Started</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="complete">Complete</SelectItem>
-                <SelectItem value="blocked">Blocked</SelectItem>
-                <SelectItem value="on_hold">On Hold</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowCompleted(!showCompleted)}
-            >
-              {showCompleted ? (
-                <>
-                  <EyeOff className="h-4 w-4 mr-2" />
-                  Hide Completed
-                </>
-              ) : (
-                <>
-                  <Eye className="h-4 w-4 mr-2" />
-                  Show Completed
-                </>
-              )}
-            </Button>
-          </div>
-
-          {/* Quick Task Entry */}
-          <form onSubmit={handleQuickTaskCreate} className="mt-4">
+          {/* Quick Task Entry - Hidden on small mobile, shown on larger screens */}
+          <form onSubmit={handleQuickTaskCreate} className="mt-2 hidden sm:block">
             <div className="flex items-center space-x-2">
               <div className="flex-1 relative">
                 <Plus className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -768,88 +780,113 @@ export function TaskList({ userId, projectId }: TaskListProps) {
                   value={quickTaskTitle}
                   onChange={(e) => setQuickTaskTitle(e.target.value)}
                   disabled={isCreatingQuickTask}
-                  className="pl-9"
+                  className="pl-9 h-9"
                 />
               </div>
               <Button
                 type="submit"
                 size="sm"
                 disabled={!quickTaskTitle.trim() || isCreatingQuickTask}
+                className="h-9"
               >
                 {isCreatingQuickTask ? 'Adding...' : 'Add Task'}
               </Button>
             </div>
           </form>
 
-          {/* Task Statistics */}
+          {/* Task Statistics - Collapsible on mobile */}
           {tasks.length > 0 && (
-            <div className="mt-4 bg-white rounded-lg border border-slate-200 p-4">
-              <h3 className="text-sm font-semibold text-slate-700 mb-3">Overview</h3>
-              <div className="flex flex-wrap items-center gap-4 lg:gap-8">
-                {/* Total Tasks */}
-                <div className="flex items-center space-x-2 lg:space-x-3">
-                  <div className="flex-shrink-0 w-8 h-8 lg:w-10 lg:h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <CheckCircle2 className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-xl lg:text-2xl font-bold text-slate-900">{stats.total}</p>
-                    <p className="text-xs text-slate-500 whitespace-nowrap">Total Tasks</p>
-                  </div>
-                </div>
+            <div className="mt-2 sm:mt-4">
+              {/* Toggle button for mobile */}
+              <button
+                onClick={() => {
+                  const newValue = !showOverview
+                  setShowOverview(newValue)
+                  try {
+                    localStorage.setItem('taskListShowOverview', JSON.stringify(newValue))
+                  } catch (error) {
+                    console.warn('Failed to save overview preference to localStorage:', error)
+                  }
+                }}
+                className="w-full sm:hidden flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-200 mb-2 hover:bg-slate-100 transition-colors"
+              >
+                <span className="text-xs font-semibold text-slate-700">Overview</span>
+                {showOverview ? (
+                  <ChevronUp className="h-4 w-4 text-slate-500" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-slate-500" />
+                )}
+              </button>
 
-                {/* Completed This Week */}
-                <div className="flex items-center space-x-2 lg:space-x-3">
-                  <div className="flex-shrink-0 w-8 h-8 lg:w-10 lg:h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                    <CheckCircle2 className="h-4 w-4 lg:h-5 lg:w-5 text-green-600" />
+              {/* Overview content - always shown on desktop, collapsible on mobile */}
+              <div className={`bg-white rounded-lg border border-slate-200 p-3 sm:p-4 ${showOverview ? 'block' : 'hidden sm:block'}`}>
+                <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-2 sm:mb-3 hidden sm:block">Overview</h3>
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4 lg:gap-8">
+                  {/* Total Tasks */}
+                  <div className="flex items-center space-x-1.5 sm:space-x-3">
+                    <div className="flex-shrink-0 w-7 h-7 sm:w-10 sm:h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <CheckCircle2 className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-lg sm:text-2xl font-bold text-slate-900">{stats.total}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 whitespace-nowrap">Total Tasks</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xl lg:text-2xl font-bold text-slate-900">{stats.completedThisWeek}</p>
-                    <p className="text-xs text-slate-500 whitespace-nowrap">Done This Week</p>
-                  </div>
-                </div>
 
-                {/* Overdue */}
-                <div className="flex items-center space-x-2 lg:space-x-3">
-                  <div className="flex-shrink-0 w-8 h-8 lg:w-10 lg:h-10 rounded-lg bg-red-100 flex items-center justify-center">
-                    <AlertCircle className="h-4 w-4 lg:h-5 lg:w-5 text-red-600" />
+                  {/* Completed This Week */}
+                  <div className="flex items-center space-x-1.5 sm:space-x-3">
+                    <div className="flex-shrink-0 w-7 h-7 sm:w-10 sm:h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                      <CheckCircle2 className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-lg sm:text-2xl font-bold text-slate-900">{stats.completedThisWeek}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 whitespace-nowrap">Done This Week</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xl lg:text-2xl font-bold text-slate-900">{stats.overdue}</p>
-                    <p className="text-xs text-slate-500 whitespace-nowrap">Overdue</p>
-                  </div>
-                </div>
 
-                {/* In Progress */}
-                <div className="flex items-center space-x-2 lg:space-x-3">
-                  <div className="flex-shrink-0 w-8 h-8 lg:w-10 lg:h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
-                    <Clock className="h-4 w-4 lg:h-5 lg:w-5 text-yellow-600" />
+                  {/* Overdue */}
+                  <div className="flex items-center space-x-1.5 sm:space-x-3">
+                    <div className="flex-shrink-0 w-7 h-7 sm:w-10 sm:h-10 rounded-lg bg-red-100 flex items-center justify-center">
+                      <AlertCircle className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-red-600" />
+                    </div>
+                    <div>
+                      <p className="text-lg sm:text-2xl font-bold text-slate-900">{stats.overdue}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 whitespace-nowrap">Overdue</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xl lg:text-2xl font-bold text-slate-900">{stats.statusCounts.in_progress}</p>
-                    <p className="text-xs text-slate-500 whitespace-nowrap">In Progress</p>
-                  </div>
-                </div>
 
-                {/* Vertical Divider */}
-                <div className="hidden lg:block h-12 w-px bg-slate-200"></div>
+                  {/* In Progress */}
+                  <div className="flex items-center space-x-1.5 sm:space-x-3">
+                    <div className="flex-shrink-0 w-7 h-7 sm:w-10 sm:h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
+                      <Clock className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-yellow-600" />
+                    </div>
+                    <div>
+                      <p className="text-lg sm:text-2xl font-bold text-slate-900">{stats.statusCounts.in_progress}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 whitespace-nowrap">In Progress</p>
+                    </div>
+                  </div>
 
-                {/* Status Breakdown - Inline */}
-                <div className="flex flex-wrap items-center gap-3 lg:gap-4 text-xs w-full lg:w-auto">
-                  <div className="flex items-center space-x-1.5">
-                    <div className="w-2 h-2 rounded-full bg-slate-400"></div>
-                    <span className="text-slate-600 whitespace-nowrap">Not Started: {stats.statusCounts.not_started}</span>
-                  </div>
-                  <div className="flex items-center space-x-1.5">
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    <span className="text-slate-600 whitespace-nowrap">Complete: {stats.statusCounts.complete}</span>
-                  </div>
-                  <div className="flex items-center space-x-1.5">
-                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                    <span className="text-slate-600 whitespace-nowrap">Blocked: {stats.statusCounts.blocked}</span>
-                  </div>
-                  <div className="flex items-center space-x-1.5">
-                    <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-                    <span className="text-slate-600 whitespace-nowrap">On Hold: {stats.statusCounts.on_hold}</span>
+                  {/* Vertical Divider */}
+                  <div className="hidden lg:block h-12 w-px bg-slate-200"></div>
+
+                  {/* Status Breakdown - Inline */}
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:gap-4 text-[10px] sm:text-xs w-full lg:w-auto">
+                    <div className="flex items-center space-x-1">
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-slate-400"></div>
+                      <span className="text-slate-600 whitespace-nowrap">Not Started: {stats.statusCounts.not_started}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-green-500"></div>
+                      <span className="text-slate-600 whitespace-nowrap">Complete: {stats.statusCounts.complete}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-500"></div>
+                      <span className="text-slate-600 whitespace-nowrap">Blocked: {stats.statusCounts.blocked}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-yellow-500"></div>
+                      <span className="text-slate-600 whitespace-nowrap">On Hold: {stats.statusCounts.on_hold}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -859,26 +896,26 @@ export function TaskList({ userId, projectId }: TaskListProps) {
 
         {/* Bulk Actions Toolbar */}
         {selectedTaskIds.size > 0 && (
-          <div className="bg-blue-50 border-b border-blue-200 px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm font-medium text-blue-900">
+          <div className="bg-blue-50 border-b border-blue-200 px-2 sm:px-4 py-2 sm:py-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+              <div className="flex items-center space-x-2 sm:space-x-4">
+                <span className="text-xs sm:text-sm font-medium text-blue-900">
                   {selectedTaskIds.size} task{selectedTaskIds.size > 1 ? 's' : ''} selected
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setSelectedTaskIds(new Set())}
-                  className="text-blue-700 hover:text-blue-900"
+                  className="text-blue-700 hover:text-blue-900 h-7 px-2 text-xs"
                 >
-                  Clear selection
+                  Clear
                 </Button>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto">
                 {/* Change Status */}
                 <Select value={bulkStatus} onValueChange={(value) => setBulkStatus(value as TaskStatus)}>
-                  <SelectTrigger className="w-[150px] h-9">
-                    <SelectValue placeholder="Change status" />
+                  <SelectTrigger className="w-[100px] sm:w-[130px] h-7 sm:h-9 text-xs">
+                    <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="not_started">Not Started</SelectItem>
@@ -888,14 +925,14 @@ export function TaskList({ userId, projectId }: TaskListProps) {
                     <SelectItem value="on_hold">On Hold</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button size="sm" onClick={handleBulkStatusChange} disabled={bulkLoading}>
-                  Update Status
+                <Button size="sm" onClick={handleBulkStatusChange} disabled={bulkLoading} className="h-7 px-2 text-xs whitespace-nowrap">
+                  Update
                 </Button>
 
                 {/* Assign Project */}
                 <Select value={bulkProject || 'none'} onValueChange={(value) => setBulkProject(value === 'none' ? null : value)}>
-                  <SelectTrigger className="w-[150px] h-9">
-                    <SelectValue placeholder="Assign project" />
+                  <SelectTrigger className="w-[100px] sm:w-[130px] h-7 sm:h-9 text-xs">
+                    <SelectValue placeholder="Project" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No project</SelectItem>
@@ -904,14 +941,14 @@ export function TaskList({ userId, projectId }: TaskListProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button size="sm" onClick={handleBulkProjectChange} disabled={bulkLoading}>
-                  Assign Project
+                <Button size="sm" onClick={handleBulkProjectChange} disabled={bulkLoading} className="h-7 px-2 text-xs whitespace-nowrap">
+                  Assign
                 </Button>
 
                 {/* Delete */}
-                <Button size="sm" variant="destructive" onClick={handleBulkDelete} disabled={bulkLoading}>
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  Delete
+                <Button size="sm" variant="destructive" onClick={handleBulkDelete} disabled={bulkLoading} className="h-7 px-2 text-xs">
+                  <Trash2 className="h-3 w-3 sm:mr-1" />
+                  <span className="hidden sm:inline">Delete</span>
                 </Button>
               </div>
             </div>
@@ -919,10 +956,10 @@ export function TaskList({ userId, projectId }: TaskListProps) {
         )}
 
         {/* Task List */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-1.5 sm:p-4">
           {filteredTasks.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="text-slate-400 mb-2">
+            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+              <div className="text-slate-400 mb-2 text-xs sm:text-sm">
                 {searchQuery
                   ? 'No tasks found matching your search'
                   : statusFilter !== 'all'
@@ -930,7 +967,7 @@ export function TaskList({ userId, projectId }: TaskListProps) {
                   : 'No tasks yet'}
               </div>
               {!searchQuery && statusFilter === 'all' && (
-                <Button variant="outline" onClick={() => setIsDialogOpen(true)}>
+                <Button variant="outline" onClick={() => setIsDialogOpen(true)} size="sm">
                   <Plus className="h-4 w-4 mr-2" />
                   Create your first task
                 </Button>
@@ -938,6 +975,7 @@ export function TaskList({ userId, projectId }: TaskListProps) {
               {(searchQuery || statusFilter !== 'all') && (
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => {
                     setSearchQuery('')
                     setStatusFilter('all')
@@ -949,41 +987,41 @@ export function TaskList({ userId, projectId }: TaskListProps) {
               )}
             </div>
           ) : (
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-              <table className="w-full table-fixed">
+            <div className="bg-white rounded-lg border border-slate-200 overflow-x-auto">
+              <table className="w-full table-auto sm:table-fixed min-w-[600px]">
                 <colgroup>
-                  <col style={{ width: '48px' }} />
-                  <col style={{ width: 'auto' }} />
-                  <col style={{ width: '144px' }} />
-                  {visibleColumns.priority && <col style={{ width: '144px' }} />}
-                  {visibleColumns.project && <col style={{ width: '160px' }} />}
-                  {visibleColumns.dueDate && <col style={{ width: '192px' }} />}
-                  {visibleColumns.lastComment && <col style={{ width: '160px' }} />}
+                  <col className="w-10 sm:w-12" />
+                  <col className="sm:w-auto" />
+                  <col className="w-28 sm:w-36" />
+                  {visibleColumns.priority && <col className="w-24 sm:w-36 hidden sm:table-column" />}
+                  {visibleColumns.project && <col className="w-28 sm:w-40 hidden sm:table-column" />}
+                  {visibleColumns.dueDate && <col className="w-32 sm:w-48" />}
+                  {visibleColumns.lastComment && <col className="w-28 sm:w-40 hidden lg:table-column" />}
                 </colgroup>
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="pl-4 pr-2 py-3 w-12">
+                    <th className="pl-1.5 sm:pl-4 pr-1 sm:pr-2 py-2 sm:py-3 w-10 sm:w-12">
                       <Checkbox
                         checked={selectedTaskIds.size === filteredTasks.length && filteredTasks.length > 0}
                         onCheckedChange={toggleSelectAll}
                       />
                     </th>
-                    <th className="pl-2 pr-4 py-3 text-sm font-medium text-slate-700">
+                    <th className="pl-1.5 sm:pl-2 pr-1.5 sm:pr-4 py-2 sm:py-3 text-left text-[10px] sm:text-sm font-medium text-slate-700">
                       <div className="flex items-center">
                         <button
                           onClick={() => handleSort('title')}
-                          className="flex items-center space-x-1 hover:text-slate-900 transition-colors"
+                          className="flex items-center space-x-0.5 sm:space-x-1 hover:text-slate-900 transition-colors"
                         >
                           <span>Task</span>
                           {getSortIcon('title')}
                         </button>
                       </div>
                     </th>
-                    <th className="px-4 py-3 text-sm font-medium text-slate-700 w-36">
+                    <th className="px-1 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-sm font-medium text-slate-700 w-28 sm:w-36">
                       <div className="flex justify-center">
                         <button
                           onClick={() => handleSort('status')}
-                          className="flex items-center space-x-1 hover:text-slate-900 transition-colors"
+                          className="flex items-center space-x-0.5 sm:space-x-1 hover:text-slate-900 transition-colors"
                         >
                           <span>Status</span>
                           {getSortIcon('status')}
@@ -991,11 +1029,11 @@ export function TaskList({ userId, projectId }: TaskListProps) {
                       </div>
                     </th>
                     {visibleColumns.priority && (
-                      <th className="px-4 py-3 text-sm font-medium text-slate-700 w-36">
+                      <th className="px-1 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-sm font-medium text-slate-700 w-24 sm:w-36 hidden sm:table-cell">
                         <div className="flex justify-center">
                           <button
                             onClick={() => handleSort('priority')}
-                            className="flex items-center space-x-1 hover:text-slate-900 transition-colors"
+                            className="flex items-center space-x-0.5 sm:space-x-1 hover:text-slate-900 transition-colors"
                           >
                             <span>Priority</span>
                             {getSortIcon('priority')}
@@ -1004,11 +1042,11 @@ export function TaskList({ userId, projectId }: TaskListProps) {
                       </th>
                     )}
                     {visibleColumns.project && (
-                      <th className="px-4 py-3 text-sm font-medium text-slate-700 w-40">
+                      <th className="px-1 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-sm font-medium text-slate-700 w-28 sm:w-40 hidden sm:table-cell">
                         <div className="flex items-center">
                           <button
                             onClick={() => handleSort('project')}
-                            className="flex items-center space-x-1 hover:text-slate-900 transition-colors"
+                            className="flex items-center space-x-0.5 sm:space-x-1 hover:text-slate-900 transition-colors"
                           >
                             <span>Project</span>
                             {getSortIcon('project')}
@@ -1017,21 +1055,21 @@ export function TaskList({ userId, projectId }: TaskListProps) {
                       </th>
                     )}
                     {visibleColumns.dueDate && (
-                      <th className="px-4 py-3 text-sm font-medium text-slate-700 w-48">
+                      <th className="px-1 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-sm font-medium text-slate-700 w-32 sm:w-48">
                         <div className="flex items-center">
                           <button
                             onClick={() => handleSort('dueDate')}
-                            className="flex items-center space-x-1 hover:text-slate-900 transition-colors"
+                            className="flex items-center space-x-0.5 sm:space-x-1 hover:text-slate-900 transition-colors"
                           >
-                            <span>Due Date</span>
+                            <span>Due</span>
                             {getSortIcon('dueDate')}
                           </button>
                         </div>
                       </th>
                     )}
                     {visibleColumns.lastComment && (
-                      <th className="px-4 py-3 text-sm font-medium text-slate-700 w-40">
-                        <div className="flex items-center">Last Comment</div>
+                      <th className="px-1 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-sm font-medium text-slate-700 w-28 sm:w-40 hidden lg:table-cell">
+                        <div className="flex items-center">Comment</div>
                       </th>
                     )}
                   </tr>
@@ -1048,34 +1086,34 @@ export function TaskList({ userId, projectId }: TaskListProps) {
                             : 'border-slate-200'
                         }`}
                       >
-                      <td className="pl-4 pr-2 py-3 align-top" onClick={(e) => e.stopPropagation()}>
+                      <td className="pl-1.5 sm:pl-4 pr-1 sm:pr-2 py-1.5 sm:py-3 align-top" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={selectedTaskIds.has(task.id)}
                           onCheckedChange={() => toggleTaskSelection(task.id)}
                         />
                       </td>
-                      <td className="pl-2 pr-4 py-3 align-top" onClick={() => handleTaskClick(task)}>
-                        <h3 className="text-sm font-medium text-slate-900">{task.title}</h3>
+                      <td className="pl-1.5 sm:pl-2 pr-1.5 sm:pr-4 py-1.5 sm:py-3 align-top" onClick={() => handleTaskClick(task)}>
+                        <h3 className="text-[11px] sm:text-sm font-medium text-slate-900 line-clamp-2">{task.title}</h3>
                       </td>
-                      <td className="px-4 py-3 align-top" onClick={() => handleTaskClick(task)}>
+                      <td className="px-1 sm:px-4 py-1.5 sm:py-3 align-top" onClick={() => handleTaskClick(task)}>
                         <div className="flex justify-center">
-                          <Badge className={statusColors[task.status]}>
+                          <Badge className={`${statusColors[task.status]} text-[9px] sm:text-xs px-1.5 sm:px-2 py-0.5`}>
                             {statusLabels[task.status]}
                           </Badge>
                         </div>
                       </td>
                       {visibleColumns.priority && (
-                        <td className="px-4 py-3 align-top" onClick={() => handleTaskClick(task)}>
+                        <td className="px-1 sm:px-4 py-1.5 sm:py-3 align-top hidden sm:table-cell" onClick={() => handleTaskClick(task)}>
                           <div className="flex justify-center items-center space-x-2">
                             {task.priority && priorityIcons[task.priority]}
-                            <span className="text-sm capitalize text-slate-600">
+                            <span className="text-xs sm:text-sm capitalize text-slate-600">
                               {task.priority || 'medium'}
                             </span>
                           </div>
                         </td>
                       )}
                       {visibleColumns.project && (
-                        <td className="px-4 py-3 align-top" onClick={() => handleTaskClick(task)}>
+                        <td className="px-1 sm:px-4 py-1.5 sm:py-3 align-top hidden sm:table-cell" onClick={() => handleTaskClick(task)}>
                           {task.project_id && projects.find(p => p.id === task.project_id) ? (
                             <div className="flex items-center space-x-2">
                               <div
@@ -1088,38 +1126,38 @@ export function TaskList({ userId, projectId }: TaskListProps) {
                                   minHeight: '12px'
                                 }}
                               />
-                              <span className="text-sm text-slate-600">
+                              <span className="text-xs sm:text-sm text-slate-600 truncate">
                                 {projects.find(p => p.id === task.project_id)?.name}
                               </span>
                             </div>
                           ) : (
-                            <span className="text-sm text-slate-400">No project</span>
+                            <span className="text-xs sm:text-sm text-slate-400">No project</span>
                           )}
                         </td>
                       )}
                       {visibleColumns.dueDate && (
-                        <td className="px-4 py-3 align-top" onClick={() => handleTaskClick(task)}>
+                        <td className="px-1 sm:px-4 py-1.5 sm:py-3 align-top" onClick={() => handleTaskClick(task)}>
                           {task.due_date ? (
-                            <div className={`flex items-center space-x-2 ${isOverdue ? 'text-red-600 font-semibold' : ''}`}>
-                              {isOverdue && <AlertCircle className="h-4 w-4 text-red-600" />}
-                              <span className={`text-sm ${isOverdue ? 'text-red-600' : 'text-slate-600'}`}>
+                            <div className={`flex items-center space-x-0.5 sm:space-x-2 ${isOverdue ? 'text-red-600 font-semibold' : ''}`}>
+                              {isOverdue && <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 text-red-600 flex-shrink-0" />}
+                              <span className={`text-[10px] sm:text-sm ${isOverdue ? 'text-red-600' : 'text-slate-600'}`}>
                                 {format(new Date(task.due_date), 'MMM d, yyyy')}
-                                {isOverdue && <span className="ml-2 text-xs">(Overdue)</span>}
+                                {isOverdue && <span className="ml-0.5 sm:ml-2 text-[9px] sm:text-xs">(Overdue)</span>}
                               </span>
                             </div>
                           ) : (
-                            <span className="text-sm text-slate-400">No due date</span>
+                            <span className="text-[10px] sm:text-sm text-slate-400">No due date</span>
                           )}
                         </td>
                       )}
                       {visibleColumns.lastComment && (
-                        <td className="px-4 py-3 align-top" onClick={() => handleTaskClick(task)}>
+                        <td className="px-1 sm:px-4 py-1.5 sm:py-3 align-top hidden lg:table-cell" onClick={() => handleTaskClick(task)}>
                           {task.lastComment ? (
-                            <p className="text-sm text-slate-600 line-clamp-1">
+                            <p className="text-xs sm:text-sm text-slate-600 line-clamp-1">
                               {task.lastComment.content}
                             </p>
                           ) : (
-                            <span className="text-sm text-slate-400">No comments</span>
+                            <span className="text-xs sm:text-sm text-slate-400">No comments</span>
                           )}
                         </td>
                       )}

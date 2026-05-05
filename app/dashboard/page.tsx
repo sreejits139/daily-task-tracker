@@ -22,9 +22,9 @@ export default async function DashboardPage({
   return (
     <div className="flex flex-col h-screen bg-slate-50">
       <NotificationBanner />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         <DashboardNav user={user} selectedProjectId={projectId} />
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 overflow-hidden w-full md:w-auto">
           <TaskList userId={user.id} projectId={projectId} />
         </main>
       </div>
